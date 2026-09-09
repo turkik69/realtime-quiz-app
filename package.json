@@ -1,0 +1,22 @@
+{
+  "name": "realtime-quiz-app",
+  "version": "1.0.0",
+  "description": "تطبيق مسابقات حية في الوقت الفعلي مع نظام تنافسي",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": ["quiz", "realtime", "socket.io", "competitive"],
+  "author": "turkik69",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.5.4",
+    "cors": "^2.8.5",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
