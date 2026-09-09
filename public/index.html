@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مسابقات حية - Real-time Quiz</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- شاشة الدخول -->
+    <div id="loginScreen" class="screen active">
+        <div class="login-container">
+            <div class="quiz-header">
+                <i class="fas fa-gamepad"></i>
+                <h1>مسابقات حية</h1>
+                <p>تنافس مع اللاعبين الآخرين الآن!</p>
+            </div>
+            
+            <div class="login-form">
+                <div class="form-group">
+                    <label for="playerName">اسم اللاعب</label>
+                    <input type="text" id="playerName" placeholder="أدخل اسمك..." maxlength="20">
+                </div>
+
+                <div class="avatar-selection">
+                    <label>اختر صورتك الشخصية</label>
+                    <div class="avatar-grid">
+                        <div class="avatar-option" data-avatar="🦸‍♂️">🦸‍♂️</div>
+                        <div class="avatar-option" data-avatar="🦸‍♀️">🦸‍♀️</div>
+                        <div class="avatar-option" data-avatar="🧙‍♂️">🧙‍♂️</div>
+                        <div class="avatar-option" data-avatar="🧙‍♀️">🧙‍♀️</div>
+                        <div class="avatar-option" data-avatar="🤖">🤖</div>
+                        <div class="avatar-option" data-avatar="👨‍🎓">👨‍🎓</div>
+                        <div class="avatar-option" data-avatar="👩‍🎓">👩‍🎓</div>
+                        <div class="avatar-option" data-avatar="🧠">🧠</div>
+                    </div>
+                </div>
+
+                <button id="joinBtn" class="btn-primary" disabled>دخول المسابقة</button>
+                <p class="info-text">استمتع بتجربة تنافسية فريدة مع لاعبين من حول العالم</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- شاشة الانتظار (اللوبي) -->
+    <div id="lobbyScreen" class="screen">
+        <div class="lobby-container">
+            <div class="lobby-header">
+                <h1>⏳ في انتظار بدء المسابقة</h1>
+                <p id="playerNameDisplay" class="player-welcome"></p>
+            </div>
+
+            <div class="players-waiting">
+                <h2>اللاعبون المتصلون</h2>
+                <div id="playersList" class="players-list"></div>
+                <p id="playersCount" class="players-count">0 لاعب متصل</p>
+            </div>
+
+            <div class="lobby-features">
+                <div class="feature">
+                    <i class="fas fa-bolt"></i>
+                    <p>مسابقة سريعة وحية</p>
+                </div>
+                <div class="feature">
+                    <i class="fas fa-trophy"></i>
+                    <p>حقق أعلى النقاط</p>
+                </div>
+                <div class="feature">
+                    <i class="fas fa-users"></i>
+                    <p>تنافس مع الجميع</p>
+                </div>
+            </div>
+
+            <div class="countdown-section">
+                <p>تم العثور على <span id="connectedPlayers">1</span> لاعب</p>
+                <div class="spinner"></div>
+                <p>انتظر قليلاً...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- شاشة السؤال -->
+    <div id="questionScreen" class="screen">
+        <div class="question-container">
+            <div class="question-header">
+                <div class="question-progress">
+                    <span id="questionNumber">1</span> / <span id="totalQuestions">10</span>
+                </div>
+                <div class="timer-circle">
+                    <svg viewBox="0 0 100 100">
+                        <circle cx="50" cy="50" r="45" class="timer-bg"></circle>
+                        <circle cx="50" cy="50" r="45" class="timer-progress" id="timerCircle"></circle>
+                    </svg>
+                    <span id="timerText" class="timer-text">15</span>
+                </div>
+            </div>
+
+            <div class="question-category">
+                <span id="categoryBadge" class="category-badge"></span>
+            </div>
+
+            <h2 id="questionText" class="question-text"></h2>
+
+            <div id="optionsContainer" class="options-container">
+                <!-- سيتم ملء الخيارات ديناميكياً -->
+            </div>
+
+            <div class="live-stats">
+                <div class="stat-item">
+                    <i class="fas fa-users"></i>
+                    <span id="answeredCount">0</span> / <span id="totalPlayersCount">0</span> أجابوا
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- شاشة النتائج بعد السؤال -->
+    <div id="resultsScreen" class="screen">
+        <div class="results-container">
+            <div class="correct-answer-display">
+                <h2>الإجابة الصحيحة</h2>
+                <div class="correct-badge">
+                    <i class="fas fa-check-circle"></i>
+                    <span id="correctAnswerDisplay"></span>
+                </div>
+            </div>
+
+            <div class="round-rankings">
+                <h3>🏆 أسرع المجيبين في هذا السؤال</h3>
+                <div id="roundResults" class="ranking-list">
+                    <!-- سيتم ملء النتائج ديناميكياً -->
+                </div>
+            </div>
+
+            <div class="current-leaderboard">
+                <h3>📊 الترتيب الحالي</h3>
+                <div id="currentLeaderboard" class="leaderboard-mini">
+                    <!-- سيتم ملء الترتيب ديناميكياً -->
+                </div>
+            </div>
+
+            <div class="next-question-timer">
+                <p>السؤال التالي بعد <span id="nextQuestionCountdown">4</span> ثانية...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- شاشة النتيجة النهائية -->
+    <div id="finalScreen" class="screen">
+        <div class="final-container">
+            <div class="final-header">
+                <h1>🎉 انتهت المسابقة!</h1>
+                <p>شكراً لمشاركتك</p>
+            </div>
+
+            <div id="finalLeaderboard" class="final-leaderboard">
+                <!-- سيتم ملء النتائج النهائية ديناميكياً -->
+            </div>
+
+            <div class="final-stats">
+                <div id="playerFinalStats" class="player-final-stats"></div>
+            </div>
+
+            <button id="playAgainBtn" class="btn-primary">العب مرة أخرى</button>
+        </div>
+    </div>
+
+    <!-- Socket.io Library -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
