@@ -15,7 +15,8 @@ app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
-// ==================== البيانات في الذاكرة ====================
+// ==================== تخزين البيانات ====================
+const playersDatabase = {}; // لحفظ بيانات المشاركين
 const quizState = {
   currentQuestionIndex: -1,
   isActive: false,
@@ -121,12 +122,33 @@ function resetRound() {
   });
 }
 
+// حفظ بيانات المشارك في قاعدة البيانات
+function savePlayerData(playerName, playerData) {
+  if (!playersDatabase[playerName]) {
+    playersDatabase[playerName] = {
+      name: playerName,
+      avatar: playerData.avatar,
+      totalGamesPlayed: 0,
+      totalScore: 0,
+      highestScore: 0,
+      correctAnswersTotal: 0,
+      lastPlayedDate: new Date().toISOString(),
+      gamesHistory: []
+    };
+  }
+  playersDatabase[playerName].lastPlayedDate = new Date().toISOString();
+}
+
 // ==================== Socket Events ====================
 io.on('connection', (socket) => {
   console.log(`✅ لاعب جديد متصل: ${socket.id}`);
 
   socket.on('join', (playerData) => {
     const playerId = socket.id;
+    
+    // حفظ بيانات المشارك
+    savePlayerData(playerData.name, playerData);
+    
     quizState.players[playerId] = {
       id: playerId,
       name: playerData.name,
@@ -142,7 +164,8 @@ io.on('connection', (socket) => {
     socket.emit('joinSuccess', {
       playerId,
       players: Object.values(quizState.players),
-      leaderboard: quizState.leaderboard
+      leaderboard: quizState.leaderboard,
+      playerStats: playersDatabase[playerData.name] || {}
     });
 
     io.emit('playersUpdate', Object.values(quizState.players));
@@ -177,6 +200,10 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
+    const playerName = quizState.players[socket.id]?.name;
+    if (playerName && playersDatabase[playerName]) {
+      playersDatabase[playerName].lastPlayedDate = new Date().toISOString();
+    }
     delete quizState.players[socket.id];
     io.emit('playersUpdate', Object.values(quizState.players));
     console.log(`❌ لاعب غادر: ${socket.id}`);
@@ -264,9 +291,48 @@ function endQuiz() {
     medal: index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : ''
   }));
 
+  // حفظ نتائج اللعبة في قاعدة البيانات
+  finalResults.forEach(result => {
+    if (playersDatabase[result.name]) {
+      playersDatabase[result.name].totalGamesPlayed++;
+      playersDatabase[result.name].totalScore += result.totalScore;
+      playersDatabase[result.name].correctAnswersTotal += result.correctAnswers;
+      
+      if (result.totalScore > playersDatabase[result.name].highestScore) {
+        playersDatabase[result.name].highestScore = result.totalScore;
+      }
+      
+      playersDatabase[result.name].gamesHistory.push({
+        date: new Date().toISOString(),
+        score: result.totalScore,
+        correctAnswers: result.correctAnswers,
+        rank: result.rank
+      });
+    }
+  });
+
   io.emit('quizEnded', finalResults);
   console.log('🏁 انتهت المسابقة!');
 }
+
+// ==================== الروابط الإضافية ====================
+// الحصول على إحصائيات المشارك
+app.get('/api/player-stats/:playerName', (req, res) => {
+  const playerName = req.params.playerName;
+  const stats = playersDatabase[playerName];
+  
+  if (stats) {
+    res.json(stats);
+  } else {
+    res.status(404).json({ error: 'اللاعب غير موجود' });
+  }
+});
+
+// الحصول على جميع المشاركين
+app.get('/api/all-players', (req, res) => {
+  const allPlayers = Object.values(playersDatabase).sort((a, b) => b.totalScore - a.totalScore);
+  res.json(allPlayers);
+});
 
 // ==================== التشغيل ====================
 const PORT = process.env.PORT || 3000;
