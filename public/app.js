@@ -1,6 +1,7 @@
 // ==================== إعدادات الاتصال ====================
 const socket = io();
 let currentPlayer = null;
+let deferredPrompt = null;
 let gameState = {
     isQuizActive: false,
     currentQuestion: null,
@@ -21,8 +22,107 @@ const screens = {
 const inputs = {
     playerName: document.getElementById('playerName'),
     joinBtn: document.getElementById('joinBtn'),
-    playAgainBtn: document.getElementById('playAgainBtn')
+    playAgainBtn: document.getElementById('playAgainBtn'),
+    installBtn: document.getElementById('installBtn')
 };
+
+// ==================== LocalStorage - حفظ البيانات ====================
+class PlayerStorage {
+    static savePlayer(playerData) {
+        const playerStats = {
+            name: playerData.name,
+            avatar: playerData.avatar,
+            joinDate: new Date().toISOString(),
+            totalGames: 0,
+            totalScore: 0,
+            bestScore: 0,
+            correctAnswers: 0,
+            averageScore: 0,
+            gamesHistory: []
+        };
+        localStorage.setItem(`player_${playerData.name}`, JSON.stringify(playerStats));
+    }
+
+    static getPlayer(playerName) {
+        const data = localStorage.getItem(`player_${playerName}`);
+        return data ? JSON.parse(data) : null;
+    }
+
+    static updatePlayerStats(playerName, gameResult) {
+        const player = this.getPlayer(playerName);
+        if (player) {
+            player.totalGames++;
+            player.totalScore += gameResult.score;
+            player.correctAnswers += gameResult.correctAnswers;
+            player.averageScore = Math.round(player.totalScore / player.totalGames);
+            
+            if (gameResult.score > player.bestScore) {
+                player.bestScore = gameResult.score;
+            }
+            
+            player.gamesHistory.push({
+                date: new Date().toISOString(),
+                score: gameResult.score,
+                correctAnswers: gameResult.correctAnswers,
+                rank: gameResult.rank
+            });
+            
+            // حفظ آخر 50 لعبة فقط
+            if (player.gamesHistory.length > 50) {
+                player.gamesHistory = player.gamesHistory.slice(-50);
+            }
+            
+            localStorage.setItem(`player_${playerName}`, JSON.stringify(player));
+            return player;
+        }
+        return null;
+    }
+
+    static getAllPlayers() {
+        const players = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key.startsWith('player_')) {
+                const playerName = key.replace('player_', '');
+                players.push(this.getPlayer(playerName));
+            }
+        }
+        return players.sort((a, b) => b.bestScore - a.bestScore);
+    }
+
+    static getLastPlayedPlayer() {
+        const lastPlayer = localStorage.getItem('lastPlayedPlayer');
+        return lastPlayer ? JSON.parse(lastPlayer) : null;
+    }
+
+    static saveLastPlayedPlayer(playerName, avatar) {
+        localStorage.setItem('lastPlayedPlayer', JSON.stringify({ name: playerName, avatar }));
+    }
+}
+
+// ==================== PWA Install ====================
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    inputs.installBtn.style.display = 'block';
+});
+
+window.addEventListener('appinstalled', () => {
+    console.log('✅ تم تثبيت التطبيق بنجاح!');
+    inputs.installBtn.style.display = 'none';
+    deferredPrompt = null;
+});
+
+if (inputs.installBtn) {
+    inputs.installBtn.addEventListener('click', async () => {
+        if (deferredPrompt) {
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            console.log(`تم اختيار المستخدم: ${outcome}`);
+            deferredPrompt = null;
+        }
+    });
+}
 
 // ==================== الدوال المساعدة ====================
 function switchScreen(screenName) {
@@ -33,19 +133,23 @@ function switchScreen(screenName) {
 }
 
 function playNotificationSound() {
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-    
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-    
-    oscillator.frequency.value = 800;
-    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
-    
-    oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + 0.1);
+    try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.frequency.value = 800;
+        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+        
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.1);
+    } catch (e) {
+        console.log('الصوت غير متاح:', e);
+    }
 }
 
 function formatTime(seconds) {
@@ -64,13 +168,27 @@ avatarOptions.forEach(option => {
     });
 });
 
+// تحميل بيانات آخر لاعب
+const lastPlayer = PlayerStorage.getLastPlayedPlayer();
+if (lastPlayer) {
+    inputs.playerName.value = lastPlayer.name;
+    selectedAvatar = lastPlayer.avatar;
+    avatarOptions.forEach(opt => {
+        if (opt.dataset.avatar === lastPlayer.avatar) {
+            opt.click();
+        }
+    });
+}
+
 // تفعيل زر الدخول عند إدخال الاسم
 inputs.playerName.addEventListener('input', () => {
     inputs.joinBtn.disabled = inputs.playerName.value.trim() === '';
 });
 
 // تعيين الاختيار الأول افتراضياً
-avatarOptions[0].click();
+if (!lastPlayer) {
+    avatarOptions[0].click();
+}
 
 // زر الدخول
 inputs.joinBtn.addEventListener('click', () => {
@@ -80,14 +198,34 @@ inputs.joinBtn.addEventListener('click', () => {
             name: playerName,
             avatar: selectedAvatar
         };
+        
+        // حفظ بيانات المشارك
+        PlayerStorage.savePlayer(currentPlayer);
+        PlayerStorage.saveLastPlayedPlayer(playerName, selectedAvatar);
+        
         socket.emit('join', currentPlayer);
     }
 });
 
 // ==================== اتصالات Socket.io ====================
+socket.on('connect', () => {
+    console.log('✅ تم الاتصال بالخادم');
+});
+
 socket.on('joinSuccess', (data) => {
     console.log('✅ تم الدخول بنجاح:', data);
     document.getElementById('playerNameDisplay').textContent = `مرحباً ${currentPlayer.name} ${currentPlayer.avatar}`;
+    
+    // عرض إحصائيات اللاعب السابقة
+    const playerStats = PlayerStorage.getPlayer(currentPlayer.name);
+    if (playerStats && playerStats.totalGames > 0) {
+        const statsText = document.createElement('p');
+        statsText.style.fontSize = '0.9em';
+        statsText.style.color = '#cbd5e1';
+        statsText.textContent = `📊 ألعاب سابقة: ${playerStats.totalGames} | أفضل درجة: ${playerStats.bestScore}`;
+        document.getElementById('playerNameDisplay').parentElement.appendChild(statsText);
+    }
+    
     switchScreen('lobby');
     updatePlayersList(data.players);
 });
@@ -134,6 +272,17 @@ socket.on('leaderboardUpdate', (leaderboard) => {
 socket.on('quizEnded', (finalResults) => {
     clearInterval(gameState.timerInterval);
     gameState.isQuizActive = false;
+    
+    // تحديث إحصائيات المشارك
+    const currentPlayerResult = finalResults.find(p => p.name === currentPlayer.name);
+    if (currentPlayerResult) {
+        PlayerStorage.updatePlayerStats(currentPlayer.name, {
+            score: currentPlayerResult.totalScore,
+            correctAnswers: currentPlayerResult.correctAnswers,
+            rank: currentPlayerResult.rank
+        });
+    }
+    
     displayFinalResults(finalResults);
     switchScreen('final');
 });
@@ -141,6 +290,10 @@ socket.on('quizEnded', (finalResults) => {
 socket.on('connect_error', (error) => {
     console.error('❌ خطأ في الاتصال:', error);
     alert('خطأ في الاتصال بالخادم. يرجى إعادة المحاولة.');
+});
+
+socket.on('disconnect', () => {
+    console.log('❌ تم قطع الاتصال');
 });
 
 // ==================== تحديث قائمة اللاعبين ====================
@@ -356,10 +509,10 @@ inputs.playAgainBtn.addEventListener('click', () => {
     location.reload();
 });
 
-// ==================== معالجة قطع الاتصال ====================
-socket.on('disconnect', () => {
-    console.log('❌ تم قطع الاتصال');
-});
-
 // ==================== التهيئة ====================
 console.log('🎮 تطبيق المسابقات جاهز!');
+console.log('✅ الميزات المفعلة:');
+console.log('  ✓ حفظ بيانات المشارك تلقائياً');
+console.log('  ✓ PWA - تثبيت على الهاتف');
+console.log('  ✓ Service Worker - العمل بدون إنترنت');
+console.log('  ✓ مسابقات حية في الوقت الفعلي');
